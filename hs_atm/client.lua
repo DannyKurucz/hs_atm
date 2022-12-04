@@ -1,109 +1,71 @@
-ESX = nil -- ESX 
-
-CreateThread(function()
-  while ESX == nil do
-    TriggerEvent('esx:getSharedObject', function(obj) ESX = obj end)
-    Wait(0)
-  end
-end)
-
-RegisterNetEvent('esx:playerLoaded') 
-AddEventHandler('esx:playerLoaded', function(xPlayer)
-    ESX.PlayerData = xPlayer
-end)
-local shop = true
-local hackmoney = 0
-local optimalizace = false 
-
-lib.registerContext({
-    id = 'shopik',
-    title = cfg.translations["shoptitle"],
-    onExit = function()
-    end,
-    options = {
-        {
-            title = cfg.translations["shoptitleitem"],
-            description = ''..cfg.translations["description"]..''..cfg.money["price"]..'$',
-            arrow = false,
-            event = 'item:server',
-            args = {value1 = 300, value2 = 'Other value'}
+lib.registerContext(
+    {
+        id = 'shopik',
+        title = cfg.translations["shoptitle"],
+        options = {
+            {
+                title = cfg.translations["shoptitleitem"],
+                description = cfg.translations["description"] .. '' .. cfg.money["price"] .. '$',
+                serverEvent = "item:buy"
+            },
         },
+    }
+)
 
+local point = lib.points.new(cfg.zones["shop"], 2)
+local isTextShow = false
 
-    },
-})
+function point:onEnter()
+    if not isTextShow then
+        lib.showTextUI(cfg.translations["markertext"])
 
-RegisterNetEvent('item:server') 
-AddEventHandler('item:server', function()
+        isTextShow = true
+    end
+end
 
-    TriggerServerEvent("item:buy")
-end)
+function point:onExit()
+    if isTextShow then
+        lib.hideTextUI()
 
+        isTextShow = false
+    end
+end
 
-CreateThread(function()
-	while true do
-        cas = 1000
-        local playerPed = GetPlayerPed(-1)
-        local Coords = GetEntityCoords(PlayerPedId())
-        local pos = cfg.zones["shop"]
-        local dist = #(Coords - pos)
-        if dist < 5 then
-            if shop then
-                shop = true
-                if shop == true then
-                    cas = 5
-                    ESX.ShowFloatingHelpNotification(cfg.translations["markertext"], pos)
-                    if IsControlJustPressed(0, 38) and dist < 2 then
-                        shop = true
-                        lib.showContext('shopik')
-
-                    end
-                end
-            end
-        end
-    Wait(cas)
-	end
-end)
-
+function point:nearby()
+    if IsControlJustPressed(0, 38) then
+        lib.showContext('shopik')
+    end
+end
 
 exports.qtarget:AddTargetModel({-1364697528, 506770882, -870868698, -1126237515}, {
 	options = {
 		{
-			event = "item:servercheck",
 			icon = "fas fa-box-circle-check",
 			label = cfg.translations["qtargettext"],
-			num = 1
+            action = function()
+                lib.callback('sd_atm:police', false, function(anycops)
+                    if anycops >= cfg.police then
+                        TriggerServerEvent("item:check")
+                        TriggerServerEvent('sd_atm:registerActivity', 1)
+                    else
+                        ESX.ShowNotification(cfg.translations["nopolice"])
+                    end
+                end)
+            end
 		},
 	},
 	distance = 2
 })
 
-RegisterNetEvent('item:servercheck') 
-AddEventHandler('item:servercheck', function()
-	ESX.TriggerServerCallback('sd_atm:police', function(anycops)
-		if anycops >= cfg.police then
-            TriggerServerEvent("item:check")
-            TriggerServerEvent('sd_atm:registerActivity', 1)
-        else
-            ESX.ShowNotification(cfg.translations["nopolice"])
-        end
-    end)
-end)
-
-RegisterNetEvent('start:minigame') 
-AddEventHandler('start:minigame', function()
-
-    hackmoney = cfg.money["random"]
+RegisterNetEvent('start:minigame', function()
     TriggerEvent("utk_fingerprint:Start", cfg.minigame["level"], cfg.minigame["lives"], cfg.minigame["minutes"], function(outcome, reason)
-        if outcome == true then -- reason will be nil if outcome is true
-            optimalizace = true
-            TriggerServerEvent("done:hack", hackmoney, optimalizace)
-            optimalizace = false
-            ESX.ShowNotification(""..cfg.translations["successhacking"].. " "..hackmoney.."$")
-
+        if outcome == true then
+            TriggerServerEvent("done:hack")
         elseif outcome == false then
-            local coords = GetEntityCoords(GetPlayerPed(-1))
+            local coords = GetEntityCoords(cache.ped)
+
             ESX.ShowNotification(cfg.translations["failedhacking"])
+
             TriggerServerEvent('sd_atm:alertcops', coords.x, coords.y, coords.z)
             Wait(30000)
             TriggerServerEvent('sd_atm:stopalertcops')
@@ -111,10 +73,13 @@ AddEventHandler('start:minigame', function()
     end)
 end)
 
+local copblip = nil
 
-RegisterNetEvent('sd_atm:setcopblip')
-AddEventHandler('sd_atm:setcopblip', function(cx,cy,cz)
-	RemoveBlip(copblip)
+RegisterNetEvent('sd_atm:setcopblip', function(cx,cy,cz)
+	if DoesBlipExist(copblip) then
+        RemoveBlip(copblip)
+    end
+
     copblip = AddBlipForCoord(cx,cy,cz)
     SetBlipSprite(copblip , 161)
     SetBlipScale(copblipy , 2.0)
